@@ -16,8 +16,9 @@ export function NavBar(): ReactElement {
 
   const links = [
     { href: "/", label: "Home" },
-    { href: "/about", label: "About" },
-    { href: "/contact", label: "Contact" },
+    { href: "/upload", label: "Upload" },
+    { href: "/dataEditor", label: "Data Editor" },
+    { href: "/classify", label: "Classify" },
   ];
 
   return (

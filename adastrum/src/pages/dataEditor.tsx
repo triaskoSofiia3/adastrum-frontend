@@ -2,6 +2,7 @@
 
 import DataTable from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
+import { DATASET_KEY, idbGet, idbSet } from "@/lib/indexedDb";
 import { ArrowLeft, Download, Save, Sparkles } from "lucide-react";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
@@ -11,33 +12,49 @@ const DataEditor = () => {
   const router = useRouter();
   const [data, setData] = useState<any[]>([]);
 
+  console.log("dataEditor");
+
   useEffect(() => {
-    // Try to read dataset from query param (JSON encoded) or localStorage
+    // Try to read dataset from query param (JSON encoded) or IndexedDB
     if (!router.isReady) return;
 
-    const queryData = router.query.data;
-    const encodedData = typeof queryData === "string" ? queryData : null;
-    const savedData = typeof window !== "undefined" ? localStorage.getItem("exoplanet_dataset") : null;
+    const load = async () => {
+      const queryData = router.query.data;
+      const encodedData = typeof queryData === "string" ? queryData : null;
 
-    if (encodedData) {
-      try {
-        const parsed = JSON.parse(decodeURIComponent(encodedData));
-        setData(parsed);
-        localStorage.setItem("exoplanet_dataset", JSON.stringify(parsed));
-      } catch {
-        toast.error("Invalid dataset passed.");
+      if (encodedData) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(encodedData));
+          setData(parsed);
+          await idbSet<any[]>(DATASET_KEY, parsed);
+          return;
+        } catch {
+          toast.error("Invalid dataset passed.");
+        }
       }
-    } else if (savedData) {
-      setData(JSON.parse(savedData));
-    } else {
-      toast.error("No dataset found. Please upload a file first.");
-      router.push("/");
-    }
+
+      try {
+        const stored = await idbGet<any[]>(DATASET_KEY);
+        if (stored && Array.isArray(stored)) {
+          setData(stored);
+        } else {
+          toast.error("No dataset found. Please upload a file first.");
+        }
+      } catch {
+        toast.error("Failed to load dataset.");
+      }
+    };
+
+    load();
   }, [router.isReady, router.query.data]);
 
-  const handleSave = () => {
-    localStorage.setItem("exoplanet_dataset", JSON.stringify(data));
-    toast.success("Dataset saved successfully!");
+  const handleSave = async () => {
+    try {
+      await idbSet<any[]>(DATASET_KEY, data);
+      toast.success("Dataset saved successfully!");
+    } catch {
+      toast.error("Failed to save dataset.");
+    }
   };
 
   const handleDownload = () => {
@@ -59,8 +76,10 @@ const DataEditor = () => {
     toast.success("Dataset downloaded!");
   };
 
-  const handleProceedToClassification = () => {
-    localStorage.setItem("exoplanet_dataset", JSON.stringify(data));
+  const handleProceedToClassification = async () => {
+    try {
+      await idbSet<any[]>(DATASET_KEY, data);
+    } catch {}
     router.push("/classify?from=editor");
   };
 
@@ -73,7 +92,7 @@ const DataEditor = () => {
         <div className="mb-6">
           <Button
             variant="ghost"
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/upload")}
             className="mb-4 hover:bg-muted/50"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />

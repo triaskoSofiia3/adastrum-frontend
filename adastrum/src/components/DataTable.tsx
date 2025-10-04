@@ -1,21 +1,23 @@
-interface DataTableProps {
-    data: any[];
-    setData: (data: any[]) => void;
-  }
-  
-  export default function DataTable({ data, setData }: DataTableProps) {
-    const handleChange = (rowIndex: number, key: string, value: string) => {
-      const updated = [...data];
-      updated[rowIndex][key] = value;
-      setData(updated);
-    };
-  
-    if (data.length === 0) return null;
-  
-    const columns = Object.keys(data[0]);
-  
-    return (
-      <table border={1} cellPadding={6} style={{ marginTop: "1rem" }}>
+
+export interface DataTableProps {
+  data: Record<string, string | number | null>[];
+  setData: (data: Record<string, string | number | null>[]) => void;
+}
+
+export default function DataTable({ data, setData }: DataTableProps) {
+  const handleChange = (rowIndex: number, key: string, value: string) => {
+    const updated = [...data];
+    updated[rowIndex] = { ...updated[rowIndex], [key]: value };
+    setData(updated);
+  };
+
+  if (!data || data.length === 0) return <p>No data available</p>;
+
+  const columns = Object.keys(data[0]);
+
+  return (
+    <div style={{ overflowX: "auto", marginTop: "1rem" }}>
+      <table border={1} cellPadding={6} cellSpacing={0}>
         <thead>
           <tr>
             {columns.map((col) => (
@@ -30,8 +32,11 @@ interface DataTableProps {
                 <td key={col}>
                   <input
                     type="text"
-                    value={row[col] || ""}
-                    onChange={(e) => handleChange(rowIdx, col, e.target.value)}
+                    value={row[col] !== null ? String(row[col]) : ""}
+                    onChange={(e) =>
+                      handleChange(rowIdx, col, e.target.value)
+                    }
+                    style={{ width: "100%" }}
                   />
                 </td>
               ))}
@@ -39,6 +44,6 @@ interface DataTableProps {
           ))}
         </tbody>
       </table>
-    );
-  }
-  
+    </div>
+  );
+}

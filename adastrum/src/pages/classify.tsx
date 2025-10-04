@@ -1,16 +1,18 @@
 "use client";
 
-import { ClassificationResults } from "@/components/ClassificationResults";
 import { HyperparameterPanel, HyperparametersType } from "@/components/HyperparameterPanel";
 import { Button } from "@/components/ui/button";
+import { DATASET_KEY, RESULTS_KEY, idbGet, idbSet } from "@/lib/indexedDb";
 import { ArrowLeft, Orbit, Sparkles } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { ClassificationResults } from "../components/ClassificationResults";
 
 const Classify = () => {
   const router = useRouter();
-  const searchParams = useSearchParams();
+
+  console.log("classify");
 
   const [data, setData] = useState<any[]>([]);
   const [hyperparameters, setHyperparameters] = useState<HyperparametersType | null>(null);
@@ -18,24 +20,39 @@ const Classify = () => {
   const [isClassifying, setIsClassifying] = useState(false);
 
   useEffect(() => {
-    // Try to load data from query param or localStorage
-    const encodedData = searchParams.get("data");
-    const savedData = localStorage.getItem("exoplanet_dataset");
+    // Try to load data from query param or IndexedDB
+    if (!router.isReady) return;
 
-    if (encodedData) {
-      try {
-        const parsed = JSON.parse(decodeURIComponent(encodedData));
-        setData(parsed);
-      } catch {
-        toast.error("Invalid dataset passed.");
+    const load = async () => {
+      const queryData = router.query.data;
+      const encodedData = typeof queryData === "string" ? queryData : null;
+
+      if (encodedData) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(encodedData));
+          setData(parsed);
+          return;
+        } catch {
+          toast.error("Invalid dataset passed.");
+        }
       }
-    } else if (savedData) {
-      setData(JSON.parse(savedData));
-    } else {
-      toast.error("No dataset found. Please upload a file first.");
-      router.push("/");
-    }
-  }, [searchParams, router]);
+
+      try {
+        const stored = await idbGet<any[]>(DATASET_KEY);
+        if (stored && Array.isArray(stored)) {
+          setData(stored);
+        } else {
+          toast.error("No dataset found. Please upload a file first.");
+          router.push("/");
+        }
+      } catch {
+        toast.error("Failed to load dataset.");
+        router.push("/");
+      }
+    };
+
+    load();
+  }, [router.isReady, router.query.data]);
 
   const handleClassify = async () => {
     if (data.length === 0) {
@@ -51,23 +68,44 @@ const Classify = () => {
     // Simulated ML classification
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
+    // Generate per-item mock predictions
+    const items = data.map((row, index) => {
+      const r = Math.random();
+      const label = r < 0.35 ? "exoplanet" : r < 0.6 ? "candidate" : "false_positive";
+      const confidence = 0.7 + Math.random() * 0.29;
+      return { id: index, label, confidence };
+    });
+
+    const predictions = items.reduce(
+      (acc, item) => {
+        if (item.label === "exoplanet") acc.exoplanets += 1;
+        else if (item.label === "candidate") acc.candidates += 1;
+        else acc.falsePositives += 1;
+        return acc;
+      },
+      { exoplanets: 0, candidates: 0, falsePositives: 0 }
+    );
+
     const mockResults = {
       accuracy: 0.92 + Math.random() * 0.05,
       precision: 0.89 + Math.random() * 0.05,
       recall: 0.87 + Math.random() * 0.05,
       f1Score: 0.88 + Math.random() * 0.05,
-      predictions: {
-        exoplanets: Math.floor(data.length * 0.35),
-        candidates: Math.floor(data.length * 0.25),
-        falsePositives: Math.floor(data.length * 0.4),
-      },
+      predictions,
+      items,
     };
+
+    try {
+      await idbSet(RESULTS_KEY, mockResults);
+    } catch {}
 
     setResults(mockResults);
     setIsClassifying(false);
     toast.success("Classification complete!", {
       description: `Accuracy: ${(mockResults.accuracy * 100).toFixed(2)}%`,
     });
+
+    router.push("/results");
   };
 
   return (
@@ -79,7 +117,7 @@ const Classify = () => {
         <div className="mb-8">
           <Button
             variant="ghost"
-            onClick={() => router.push("/editor")}
+            onClick={() => router.push("/dataEditor")}
             className="mb-4 hover:bg-muted/50"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
